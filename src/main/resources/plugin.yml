@@ -2,3 +2,6 @@ name: SkillTreeShop
 version: '${version}'
 main: lantum.skilltreeshop.SkillTreeShop
 api-version: 1.16
+commands:
+  스킬트리:
+    description: "스킬트리 명령어"
