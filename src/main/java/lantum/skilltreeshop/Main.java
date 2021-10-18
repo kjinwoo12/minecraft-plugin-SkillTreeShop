@@ -5,28 +5,36 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 
 public final class Main extends JavaPlugin {
+
     ArrayList<CommandInterface> commands;
 
     @Override
     public void onEnable() {
+
+        //Add commands
         commands = new ArrayList<CommandInterface>();
-        commands.add(new CommandCreateSkillTree());
+        commands.add(new CommandCreateSkillTree(this));
         commands.add(new CommandDeleteSkillTree());
         commands.add(new CommandOpenSkillTree());
+        commands.add(new CommandSettingSkillTree());
         commands.add(new CommandSetSkillCost());
         commands.add(new CommandSetSkillRefundCost());
         commands.add(new CommandDisableBuying());
         commands.add(new CommandEnableBuying());
         commands.add(new CommandDisableRefund());
         commands.add(new CommandEnableRefund());
+
+        //Init Singletons
+        SkillManager.getInstance().initialize(this);
+        MoneyManager.getInstance().initialize(this);
+        SkillTreeManager.getInstance().initialize(this);
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
+        SkillTreeManager.getInstance().saveSkillTrees();
     }
 
     @Override
