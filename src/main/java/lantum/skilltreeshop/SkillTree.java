@@ -11,7 +11,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 
 import java.io.*;
 import java.util.HashMap;
@@ -47,29 +46,80 @@ public class SkillTree implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+        //If player doesn't open the skilltree or is EDIT mode for, then return.
         Player player = (Player) event.getWhoClicked();
         String playerName = player.getName();
         OpenMode openMode = playersOpenModes.get(playerName);
         if(!playersOpenModes.containsKey(playerName)||openMode == OpenMode.NONE||openMode == OpenMode.EDIT) {
             return;
         }
+
+        //If clicked inventory is not skilltree or player's inventory, then return
         Inventory clickedInventory = event.getClickedInventory();
         Inventory playerInventory = player.getInventory();
         if(!clickedInventory.equals(skillInventory)&&!clickedInventory.equals(playerInventory)) {
             return;
         }
-        ItemStack clickedItem = clickedInventory.getItem(event.getSlot());
+
+        //Do click action
         switch (openMode) {
             case SHOP:
-                if(clickedInventory.equals(skillInventory)) event.setCancelled(true);
-                if(event.isLeftClick() && clickedInventory.equals(skillInventory)) buySkill(player, clickedItem);
-                else if(event.isRightClick() && clickedInventory.equals(playerInventory)) {
-                    event.setCancelled(true);
-                    refundSkill(player, clickedItem);
-                }
+                onShopClicked(event);
                 break;
             default:
                 logger.warning("OpenMode is incorrect value.");
+        }
+    }
+
+    private void onShopClicked(InventoryClickEvent event) {
+        Player player = (Player) event.getWhoClicked();
+        Inventory clickedInventory = event.getClickedInventory();
+        Inventory playerInventory = player.getInventory();
+        ItemStack clickedItem = clickedInventory.getItem(event.getSlot());
+        SkillManager skillManager = SkillManager.getInstance();
+
+        //Cancel event
+        if(clickedInventory.equals(skillInventory)) {
+            event.setCancelled(true);
+        }
+
+        //Do click action
+        if(event.isLeftClick() && clickedInventory.equals(skillInventory)) {
+            int skillTier = skillManager.getTier(skillInventory, clickedItem);
+
+            //Checkout player already has the item
+            if(playerInventory.contains(clickedItem)) {
+                player.sendMessage("이미 해당 스킬을 소유하고 있습니다.");
+                return;
+            }
+
+            //Checkout player doesn't have same tier skill
+            for(int i=skillTier*9, end=i+9; i<end; i++) {
+                ItemStack slotItem = skillInventory.getItem(i);
+                if(slotItem == null) continue;
+                if(playerInventory.contains(slotItem)) {
+                    player.sendMessage("이미 해당 스킬과 같은 티어의 스킬을 소유하고 있습니다.");
+                    return;
+                }
+            }
+
+            if(skillTier == 0) {
+                buySkill(player, clickedItem);
+            } else {
+                //Checkout player has row tier skill
+                for(int i=(skillTier-1)*9, end=i+9; i<end; i++) {
+                    ItemStack slotItem = skillInventory.getItem(i);
+                    if(slotItem == null) continue;
+                    if(playerInventory.contains(slotItem)) {
+                        buySkill(player, clickedItem);
+                        return;
+                    }
+                }
+                player.sendMessage("해당 스킬의 하위 스킬이 없어 구매할 수 없습니다.");
+            }
+        } else if(event.isRightClick() && clickedInventory.equals(playerInventory)) {
+            event.setCancelled(true);
+            refundSkill(player, clickedItem);
         }
     }
 

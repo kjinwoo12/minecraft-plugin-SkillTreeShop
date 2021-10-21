@@ -1,6 +1,7 @@
 package lantum.skilltreeshop;
 
 import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -92,13 +93,11 @@ public class SkillManager {
         itemStack.setItemMeta(itemMeta);
     }
 
-    String getValueFromItemPersistentData(ItemStack itemStack) {
-        ItemMeta itemMeta = itemStack.getItemMeta();
-        PersistentDataContainer persistentDataContainer = itemMeta.getPersistentDataContainer();
-        int buying = persistentDataContainer.get(buyingCostKey, PersistentDataType.INTEGER);
-        int refund = persistentDataContainer.get(refundCostKey, PersistentDataType.INTEGER);
-        String buyingEnable = persistentDataContainer.get(enableBuyingKey, PersistentDataType.STRING);
-        String refundEnable = persistentDataContainer.get(enableRefundKey, PersistentDataType.STRING);
-        return buying+"/"+refund+"/"+buyingEnable+"/"+refundEnable;
+    //The number '9' is width of line. Tier for itemStack is decided by what line itemStack in inventory is.
+    //If the item is in the 6th slot of first line, then the item's tier is 6/9 = 0.
+    //If the item is in the 3th slot of third line, then the item's tier is 21/9 = 2.
+    int getTier(Inventory inventory, ItemStack itemStack) {
+        if(!inventory.contains(itemStack)) return -1;
+        return inventory.first(itemStack)/9;
     }
 }
