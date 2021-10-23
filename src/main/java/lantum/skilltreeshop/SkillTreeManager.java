@@ -68,7 +68,7 @@ public class SkillTreeManager {
             BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
             String line;
             while((line = bufferedReader.readLine()) != null ) {
-                addSkillTree(new SkillTree(javaPlugin.getLogger(), line));
+                addSkillTree(new SkillTree(javaPlugin, line));
             }
             bufferedReader.close();
             logger.warning("[SkillTreeShop] Success load skillTrees : '"+ SKILLTREE_INDEX_FILENAME +"'");

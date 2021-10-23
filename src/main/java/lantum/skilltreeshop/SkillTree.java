@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -11,19 +12,14 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
 import java.util.HashMap;
-import java.util.List;
 import java.util.logging.Logger;
 
 public class SkillTree implements Listener {
-    public enum OpenMode {
-        EDIT,
-        SHOP,
-        NONE
-    }
-
     private static final String SKILLTREE_ROOT = "plugins/SkillTreeShop";
     private static final String SKILLTREE_EXTENSION = ".skilltree";
     private static final String INVENTORY_CONTENTS_KEY = "inventory";
@@ -32,106 +28,139 @@ public class SkillTree implements Listener {
     private static final String COST_REFUND_KEY = ".cost_refund";
     private static final String ENABLE_BUYING_KEY = ".enable_buying";
     private static final String ENABLE_REFUND_KEY = ".enable_refund";
-    private Inventory skillInventory;
+    private Inventory skillInventorySample;
+    private HashMap<Player, Inventory> skillInventoryMap;
     private String name;
+    private JavaPlugin javaPlugin;
     private Logger logger;
-    HashMap<String, OpenMode> playersOpenModes;
 
-    public SkillTree(Logger logger, String name) throws Exception {
-        this.logger = logger;
+    public SkillTree(JavaPlugin javaPlugin, String name) throws Exception {
+        this.javaPlugin = javaPlugin;
+        this.logger = javaPlugin.getLogger();
         this.name = name;
-        playersOpenModes = new HashMap<>();
-        skillInventory = load();
+        skillInventoryMap = new HashMap<>();
+        skillInventorySample = load();
     }
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        //If player doesn't open the skilltree or is EDIT mode for, then return.
         Player player = (Player) event.getWhoClicked();
-        String playerName = player.getName();
-        OpenMode openMode = playersOpenModes.get(playerName);
-        if(!playersOpenModes.containsKey(playerName)||openMode == OpenMode.NONE||openMode == OpenMode.EDIT) {
-            return;
-        }
-
-        //If clicked inventory is not skilltree or player's inventory, then return
         Inventory clickedInventory = event.getClickedInventory();
+        if(clickedInventory == null) return;
         Inventory playerInventory = player.getInventory();
-        if(!clickedInventory.equals(skillInventory)&&!clickedInventory.equals(playerInventory)) {
-            return;
-        }
 
-        //Do click action
-        switch (openMode) {
-            case SHOP:
-                onShopClicked(event);
-                break;
-            default:
-                logger.warning("OpenMode is incorrect value.");
+        if(skillInventoryMap.containsKey(player)&&clickedInventory.equals(skillInventoryMap.get(player))) {
+            onShopClicked(event);
+            return;
+        } else if(clickedInventory.equals(playerInventory)) {
+            onPlayerInventoryClicked(event);
+            return;
         }
     }
 
     private void onShopClicked(InventoryClickEvent event) {
-        Player player = (Player) event.getWhoClicked();
-        Inventory clickedInventory = event.getClickedInventory();
-        Inventory playerInventory = player.getInventory();
-        ItemStack clickedItem = clickedInventory.getItem(event.getSlot());
-        SkillManager skillManager = SkillManager.getInstance();
+        event.setCancelled(true);
 
-        //Cancel event
-        if(clickedInventory.equals(skillInventory)) {
-            event.setCancelled(true);
+        Inventory clickedInventory = event.getClickedInventory();
+        ItemStack clickedItem = clickedInventory.getItem(event.getSlot());
+        ItemStack sampleItem = skillInventorySample.getItem(event.getSlot());
+        if(clickedItem == null || sampleItem == null) return;
+        Player player = (Player) event.getWhoClicked();
+        Inventory playerInventory = player.getInventory();
+        Inventory playerSkillInventory = skillInventoryMap.get(player);
+        SkillManager skillManager = SkillManager.getInstance();
+        int skillTier = skillManager.getTier(playerSkillInventory, clickedItem);
+
+        if(playerInventory.contains(sampleItem)) {
+            player.sendMessage("이미 해당 스킬을 소유하고 있습니다.");
+            return;
         }
 
-        //Do click action
-        if(event.isLeftClick() && clickedInventory.equals(skillInventory)) {
-            int skillTier = skillManager.getTier(skillInventory, clickedItem);
-
-            //Checkout player already has the item
-            if(playerInventory.contains(clickedItem)) {
-                player.sendMessage("이미 해당 스킬을 소유하고 있습니다.");
+        for(int i=skillTier*9, end=i+9; i<end; i++) {
+            ItemStack slotItem = skillInventorySample.getItem(i);
+            if(slotItem == null) continue;
+            if(playerInventory.contains(slotItem)) {
+                player.sendMessage("이미 해당 스킬과 같은 티어의 스킬을 소유하고 있습니다.");
                 return;
             }
+        }
 
-            //Checkout player doesn't have same tier skill
-            for(int i=skillTier*9, end=i+9; i<end; i++) {
-                ItemStack slotItem = skillInventory.getItem(i);
+        if(skillTier == 0) {
+            buySkill(player, sampleItem);
+            GlowEnchantment.doEnchant(javaPlugin, clickedItem);
+        } else {
+            //Checkout player has row tier skill
+            for(int i=(skillTier-1)*9, end=i+9; i<end; i++) {
+                ItemStack slotItem = skillInventorySample.getItem(i);
                 if(slotItem == null) continue;
                 if(playerInventory.contains(slotItem)) {
-                    player.sendMessage("이미 해당 스킬과 같은 티어의 스킬을 소유하고 있습니다.");
+                    buySkill(player, sampleItem);
+                    GlowEnchantment.doEnchant(javaPlugin, clickedItem);
                     return;
                 }
             }
-
-            if(skillTier == 0) {
-                buySkill(player, clickedItem);
-            } else {
-                //Checkout player has row tier skill
-                for(int i=(skillTier-1)*9, end=i+9; i<end; i++) {
-                    ItemStack slotItem = skillInventory.getItem(i);
-                    if(slotItem == null) continue;
-                    if(playerInventory.contains(slotItem)) {
-                        buySkill(player, clickedItem);
-                        return;
-                    }
-                }
-                player.sendMessage("해당 스킬의 하위 스킬이 없어 구매할 수 없습니다.");
-            }
-        } else if(event.isRightClick() && clickedInventory.equals(playerInventory)) {
-            event.setCancelled(true);
-            refundSkill(player, clickedItem);
+            player.sendMessage("해당 스킬의 하위 스킬이 없어 구매할 수 없습니다.");
         }
+    }
+
+    private void onPlayerInventoryClicked(InventoryClickEvent event) {
+        if(!event.isRightClick()) return;
+        event.setCancelled(true);
+        ItemStack clickedItem = event.getClickedInventory().getItem(event.getSlot());
+        if(clickedItem == null) return;
+        Player player = (Player) event.getWhoClicked();
+
+        if(!skillInventorySample.contains(clickedItem)) return;
+        int itemSlot = 0;
+        for(int i=0, size=skillInventorySample.getMaxStackSize(); i<size; i++) {
+            ItemStack itemStack = skillInventorySample.getItem(i);
+            if(itemStack == null) continue;
+            if(itemStack.equals(clickedItem)) {
+                itemSlot = i;
+                break;
+            }
+        }
+
+        ItemStack refundedItemOnShop = skillInventoryMap.get(player).getItem(itemSlot);
+        ItemMeta itemMeta = refundedItemOnShop.getItemMeta();
+        for (Enchantment enchantment : itemMeta.getEnchants().keySet()) {
+            itemMeta.removeEnchant(enchantment);
+        }
+        refundedItemOnShop.setItemMeta(itemMeta);
+        refundSkill(player, clickedItem);
     }
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        if(!event.getInventory().equals(skillInventory)) return;
-        playersOpenModes.put(event.getPlayer().getName(), OpenMode.NONE);
+        Player player = (Player) event.getPlayer();
+        Inventory closedInventory = event.getInventory();
+        if(closedInventory.equals(skillInventorySample)) {
+            try {
+                save();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return;
+        } else if(skillInventoryMap.containsKey(player)&&closedInventory.equals(skillInventoryMap.get(player))) {
+            skillInventoryMap.remove(player);
+            return;
+        }
+
     }
 
-    void open(Player player, OpenMode openMode) {
-        String playerName = player.getName();
-        playersOpenModes.put(playerName, openMode);
+    void openEditMode(Player player) {
+        player.openInventory(skillInventorySample);
+    }
+
+    void openShopMode(Player player) {
+        Inventory skillInventory = Bukkit.createInventory(null, 54, name);
+        Inventory playerInventory = player.getInventory();
+        skillInventory.setContents(skillInventorySample.getContents());
+        for(ItemStack itemStack : skillInventory) {
+            if(playerInventory.contains(itemStack))
+                GlowEnchantment.doEnchant(javaPlugin, itemStack);
+        }
+        skillInventoryMap.put(player, skillInventory);
         player.openInventory(skillInventory);
     }
 
@@ -174,7 +203,7 @@ public class SkillTree implements Listener {
     void save() throws IOException {
         File file = new File(SKILLTREE_ROOT, name+SKILLTREE_EXTENSION);
         FileConfiguration fileConfiguration = new YamlConfiguration();
-        ItemStack[] contents = skillInventory.getContents();
+        ItemStack[] contents = skillInventorySample.getContents();
         SkillManager skillManager = SkillManager.getInstance();
         for(int i=0; i<contents.length; i++) {
             if(contents[i] == null) continue;

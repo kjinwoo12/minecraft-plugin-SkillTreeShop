@@ -30,6 +30,9 @@ public final class Main extends JavaPlugin {
         SkillManager.getInstance().initialize(this);
         MoneyManager.getInstance().initialize(this);
         SkillTreeManager.getInstance().initialize(this);
+
+        //Regist glow enchant
+        GlowEnchantment.Regist(this);
     }
 
     @Override

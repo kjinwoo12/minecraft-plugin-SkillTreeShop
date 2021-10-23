@@ -37,7 +37,7 @@ class CommandCreateSkillTree implements CommandInterface {
         String skillTreeName = args[1];
         SkillTree skillTree;
         try {
-            skillTree = new SkillTree(javaPlugin.getLogger(), skillTreeName);
+            skillTree = new SkillTree(javaPlugin, skillTreeName);
         } catch (Exception e) {
             javaPlugin.getLogger().warning("Failed to create skillTree.");
             sender.sendMessage("스킬트리를 생성하는데 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -98,7 +98,7 @@ class CommandSettingSkillTree implements CommandInterface {
         }
 
         Player player = sender.getServer().getPlayer(sender.getName());
-        skillTree.open(player, SkillTree.OpenMode.EDIT);
+        skillTree.openEditMode(player);
         return true;
     }
 }
@@ -126,7 +126,7 @@ class CommandOpenSkillTree implements CommandInterface {
         }
 
         Player player = sender.getServer().getPlayer(sender.getName());
-        skillTree.open(player, SkillTree.OpenMode.SHOP);
+        skillTree.openShopMode(player);
         return true;
     }
 }
